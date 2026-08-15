@@ -9,7 +9,7 @@ Objectifs :
 - Agrégation progressive
 - Export Parquet optimisé
 
-Auteur : toi 😎
+Auteur : Ruben Kloutse 😎
 """
 
 import pandas as pd

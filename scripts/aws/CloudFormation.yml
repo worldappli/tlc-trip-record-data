@@ -1,0 +1,366 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  AWS CloudFormation Template
+  Infrastructure of the company
+Resources:
+  #
+  # Network
+  #
+  InfraVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: 'InfraVPC'
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt InfraVPC.CidrBlock, 1, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'InfraVPC-private-a'
+      VpcId: !Ref InfraVPC
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt InfraVPC.CidrBlock, 2, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'InfraVPC-private-b'
+      VpcId: !Ref InfraVPC
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      CidrBlock: !Select [ 100, !Cidr [ !GetAtt InfraVPC.CidrBlock, 101, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'InfraVPC-public-a'
+      VpcId: !Ref InfraVPC
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      CidrBlock: !Select [ 101, !Cidr [ !GetAtt InfraVPC.CidrBlock, 102, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'InfraVPC-public-b'
+      VpcId: !Ref InfraVPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: 'InfraVPC-InternetGateway'
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref InfraVPC
+      InternetGatewayId: !Ref InternetGateway
+  NatEipA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NatEipB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NatGatewayA:
+    DependsOn: AttachInternetGateway
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: InfraVPC-nat-a
+  NatGatewayB:
+    DependsOn: AttachInternetGateway
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipB.AllocationId
+      SubnetId: !Ref PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: InfraVPC-nat-b
+  PublicRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref InfraVPC
+      Tags:
+        - Key: Name
+          Value: InfraVPC-route-public-a
+  AttachPublicRouteTableA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableA
+      SubnetId: !Ref PublicSubnetA
+  PublicRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref InfraVPC
+      Tags:
+        - Key: Name
+          Value: InfraVPC-route-public-b
+  AttachPublicRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableB
+      SubnetId: !Ref PublicSubnetB
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref InfraVPC
+      Tags:
+        - Key: Name
+          Value: InfraVPC-route-private-a
+  AttachPrivateRouteTableA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref PrivateSubnetA
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref InfraVPC
+      Tags:
+        - Key: Name
+          Value: InfraVPC-route-private-b
+  AttachPrivateRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref PrivateSubnetB
+  PublicRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableA
+  PublicRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableB
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+      RouteTableId: !Ref PrivateRouteTableA
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayB
+      RouteTableId: !Ref PrivateRouteTableB
+  #
+  # Infrastructure
+  #
+  InfraEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Infra EC2 security group
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref InfraLoadBalancerSecurityGroup
+      VpcId: !Ref InfraVPC
+  InfraLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: false
+      ImageId: !GetAtt ImageInfo.Id
+      InstanceType: t2.micro
+      SecurityGroups:
+        - !Ref InfraEC2SecurityGroup
+      #
+      # NOTE: no need to use sudo on UserData,
+      #       because it will always run as root
+      #
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum -y update
+          yum -y install httpd
+          systemctl start httpd
+  InfraScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref InfraLaunchConfig
+      AvailabilityZones:
+        - Fn::Select:
+          - 0
+          - Fn::GetAZs: !Ref AWS::Region
+        - Fn::Select:
+          - 1
+          - Fn::GetAZs: !Ref AWS::Region
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      DesiredCapacity: 1
+      MaxSize: 1
+      MinSize: 1
+      TargetGroupARNs:
+        - !Ref InfraTargetGroup
+    DependsOn:
+      - NatGatewayA
+      - NatGatewayB
+  InfraTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref InfraVPC
+      HealthCheckIntervalSeconds: 10
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+  InfraLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref InfraLoadBalancerSecurityGroup
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+  InfraLoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Infra EC2 security group
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref InfraVPC
+  InfraLoadBlancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref InfraLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref InfraTargetGroup
+  #
+  # Custom resource to get fresh AMI identifier from AWS
+  #
+  ImageInfo:
+    Type: Custom::ImageInfo
+    Properties:
+      ServiceToken: !GetAtt
+        - ImageInfoFunction
+        - Arn
+      Region: !Ref AWS::Region
+  ImageInfoFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        # Code from official documentation:  https://docs.aws.amazon.com/fr_fr/AWSCloudFormation/latest/UserGuide/walkthrough-custom-resources-lambda-lookup-amiids.html
+        # With a few customizations to use: https://docs.aws.amazon.com/fr_fr/AWSCloudFormation/latest/UserGuide/aws-properties-lambda-function-code.html#cfn-lambda-function-code-cfnresponsemodule
+        # This custom resource will get the latest AmazonLinux AMI from AWS Images registry
+        ZipFile: >
+          var response = require('cfn-response');
+          var aws = require("aws-sdk");
+          exports.handler = function (event, context) {
+            if (event.RequestType == "Delete") {
+              response.send(event, context, response.SUCCESS);
+              return;
+            }
+            var responseStatus = "FAILED";
+            var responseData = {};
+            // Region was a parameter
+            var ec2 = new aws.EC2({ region: event.ResourceProperties.Region });
+            var describeImagesParams = {
+              Filters: [{ Name: "name", Values: ["amzn2-ami-hvm-2.0.*-x86_64-gp2"] }],
+              Owners: ["amazon"]
+            };
+            // Get AMI IDs with the specified name pattern and owner
+            ec2.describeImages(describeImagesParams, function (err, describeImagesResult) {
+              if (err) {
+                responseData = { Error: "DescribeImages call failed" };
+                console.log(err);
+              } else {
+                // Sort images by name in decscending order.
+                // The names contain the AMI version, formatted as YYYY.MM.Ver
+                var images = describeImagesResult.Images;
+                images.sort(function (x, y) { return y.Name.localeCompare(x.Name); });
+                for (var j = 0; j < images.length; j++) {
+                  if (isBeta(images[j].Name)) continue;
+                  responseStatus = "SUCCESS";
+                  responseData["Id"] = images[j].ImageId;
+                  break;
+                }
+              }
+              // Send result to signed URL
+              // If no image was found, status will be FAILED
+              response.send(event, context, responseStatus, responseData);
+            });
+          };
+          function isBeta(imageName) {
+            return imageName.toLowerCase().indexOf("beta") > -1 || imageName.toLowerCase().indexOf(".rc") > -1;
+          }
+      Handler: 'index.handler'
+      Role: !GetAtt
+        - LambdaExecutionRole
+        - Arn
+      Runtime: nodejs12.x
+      Timeout: '30'
+  #
+  # An AWS::IAM resouce is required to have the lambda collect the AMI list
+  # You may have a warning about it when deploying the CloudFormation template
+  #
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeImages'
+                Resource: '*'
+Outputs:
+  DeployedAmiId:
+    Description: 'The AMI identifier of deployed EC2 instance'
+    Value: !GetAtt ImageInfo.Id

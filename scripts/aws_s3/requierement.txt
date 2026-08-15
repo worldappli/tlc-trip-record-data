@@ -1,0 +1,8 @@
+pandas
+numpy
+pyarrow
+boto3
+s3fs
+matplotlib
+sqlalchemy
+psycopg2-binary

@@ -1,0 +1,272 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Website Infrastructure with Auto Scaling Group,
+  Launch Template and Application Load Balancer
+  (Amazon Linux 2023)
+
+##############################################################
+# PARAMETERS
+##############################################################
+
+Parameters:
+
+  VpcIdentifier:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing VPC
+
+  AmiIdentifier:
+    Type: AWS::EC2::Image::Id
+    Description: Amazon Machine Image (AMI)
+
+  PublicSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Public subnet IDs
+
+  KeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 Key Pair
+
+##############################################################
+# RESOURCES
+##############################################################
+
+Resources:
+
+##############################################################
+# SECURITY GROUP EC2
+##############################################################
+
+  WebsiteEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for Website EC2
+
+      VpcId: !Ref VpcIdentifier
+
+      SecurityGroupIngress:
+
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref WebsiteLoadBalancerSecurityGroup
+
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+      SecurityGroupEgress:
+
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+##############################################################
+# SECURITY GROUP LOAD BALANCER
+##############################################################
+
+  WebsiteLoadBalancerSecurityGroup:
+
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for ALB
+
+      VpcId: !Ref VpcIdentifier
+
+      SecurityGroupIngress:
+
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+      SecurityGroupEgress:
+
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+##############################################################
+# LAUNCH TEMPLATE
+##############################################################
+
+  WebsiteLaunchTemplate:
+
+    Type: AWS::EC2::LaunchTemplate
+
+    Properties:
+
+      LaunchTemplateName: WebsiteLaunchTemplate
+
+      LaunchTemplateData:
+
+        ImageId: !Ref AmiIdentifier
+
+        InstanceType: t3.micro
+
+        KeyName: !Ref KeyPair
+
+        SecurityGroupIds:
+
+          - !Ref WebsiteEC2SecurityGroup
+
+        UserData:
+
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            systemctl enable httpd
+            systemctl start httpd
+
+##############################################################
+# TARGET GROUP
+##############################################################
+
+  WebsiteTargetGroup:
+
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+
+    Properties:
+
+      Name: WebsiteTargetGroup
+
+      Port: 80
+
+      Protocol: HTTP
+
+      TargetType: instance
+
+      VpcId: !Ref VpcIdentifier
+
+      HealthCheckEnabled: true
+
+      HealthCheckProtocol: HTTP
+
+      HealthCheckPath: /
+
+      HealthCheckIntervalSeconds: 30
+
+      HealthCheckTimeoutSeconds: 5
+
+      HealthyThresholdCount: 5
+
+      UnhealthyThresholdCount: 2
+
+      Matcher:
+
+        HttpCode: 200
+
+##############################################################
+# LOAD BALANCER
+##############################################################
+
+  WebsiteLoadBalancer:
+
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+
+    Properties:
+
+      Name: WebsiteLoadBalancer
+
+      Scheme: internet-facing
+
+      Type: application
+
+      SecurityGroups:
+
+        - !Ref WebsiteLoadBalancerSecurityGroup
+
+      Subnets: !Ref PublicSubnets
+
+##############################################################
+# LISTENER
+##############################################################
+
+  WebsiteListener:
+
+    Type: AWS::ElasticLoadBalancingV2::Listener
+
+    Properties:
+
+      LoadBalancerArn: !Ref WebsiteLoadBalancer
+
+      Port: 80
+
+      Protocol: HTTP
+
+      DefaultActions:
+
+        - Type: forward
+          TargetGroupArn: !Ref WebsiteTargetGroup
+
+##############################################################
+# AUTO SCALING GROUP
+##############################################################
+
+  WebsiteAutoScalingGroup:
+
+    Type: AWS::AutoScaling::AutoScalingGroup
+
+    Properties:
+
+      MinSize: "1"
+
+      MaxSize: "1"
+
+      DesiredCapacity: "1"
+
+      HealthCheckType: ELB
+
+      HealthCheckGracePeriod: 120
+
+      VPCZoneIdentifier: !Ref PublicSubnets
+
+      TargetGroupARNs:
+
+        - !Ref WebsiteTargetGroup
+
+      LaunchTemplate:
+
+        LaunchTemplateId: !Ref WebsiteLaunchTemplate
+
+        Version: !GetAtt WebsiteLaunchTemplate.LatestVersionNumber
+
+      Tags:
+
+        - Key: Name
+          Value: Website-Server
+          PropagateAtLaunch: true
+
+##############################################################
+# OUTPUTS
+##############################################################
+
+Outputs:
+
+  LoadBalancerDNS:
+
+    Description: DNS Name of the Application Load Balancer
+
+    Value: !GetAtt WebsiteLoadBalancer.DNSName
+
+  LoadBalancerArn:
+
+    Description: ARN of the Load Balancer
+
+    Value: !Ref WebsiteLoadBalancer
+
+  TargetGroupArn:
+
+    Description: Target Group ARN
+
+    Value: !Ref WebsiteTargetGroup
+
+  AutoScalingGroup:
+
+    Description: Auto Scaling Group Name
+
+    Value: !Ref WebsiteAutoScalingGroup
+
+
+
