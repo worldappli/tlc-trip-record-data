@@ -1,0 +1,29 @@
+# Python virtual environments
+.venv/
+.venv1/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# IDE
+.idea/
+.vscode/
+
+# Environment / secrets
+.env
+*.pem
+
+# Python cache
+.pytest_cache/
+
+# Data files
+*.parquet
+*.csv
+
+# OS
+.DS_Store
+Thumbs.db
